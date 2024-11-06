@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>colton.boo</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👻</text></svg>">
     <style>
         body {
             display: flex;
@@ -13,12 +16,40 @@
             margin: 0;
             background-color: #000;
         }
-        .ghost {
-            font-size: 100px; /* Adjust size as needed */
+
+        #counter {
+            font-size: 100px;
+            /* Adjust size as needed */
         }
     </style>
 </head>
+
 <body>
-    <div class="ghost">👻</div>
+    <div id="counter"></div>
 </body>
+
 </html>
+
+<script>
+    const EMOJIS = [
+        "☠️",
+        "💀",
+        "🦴",
+        "👻",
+    ]
+
+    let i = 0;
+
+    const counterElement = document.getElementById('counter');
+    counterElement.textContent = EMOJIS[i];
+
+    const interval = setInterval(() => {
+        i++;
+        counterElement.textContent = EMOJIS[i];
+
+        if (i >= EMOJIS.length) {
+            clearInterval(interval);
+            window.location.href = 'https://cmpadden.github.io';
+        }
+    }, 1000);
+</script>
