@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+const source = process.argv[2];
+if (!source) throw new Error('Pass the Blender GLB path');
+const b = fs.readFileSync(source);
+const n = b.readUInt32LE(12);
+const j = JSON.parse(b.subarray(20, 20 + n));
+j.nodes = j.nodes.filter(o => o.name.startsWith('Ghost · body') || o.name.startsWith('Inset black fabric shell'));
+if (j.nodes.length !== 2) throw new Error('Expected sheet and black lining');
+j.scenes = [{name:'Ghost',nodes:j.nodes.map((_,i)=>i)}]; j.scene = 0;
+const json = Buffer.from(JSON.stringify(j));
+const padded = Buffer.alloc(Math.ceil(json.length / 4) * 4, 32); json.copy(padded);
+const tail = b.subarray(20 + n);
+const header = Buffer.alloc(20); header.write('glTF');header.writeUInt32LE(2,4);
+header.writeUInt32LE(20+padded.length+tail.length,8);header.writeUInt32LE(padded.length,12);header.writeUInt32LE(0x4e4f534a,16);
+fs.mkdirSync('public/models',{recursive:true});
+fs.writeFileSync('public/models/ghost.glb',Buffer.concat([header,padded,tail]));
+console.log('Exported ghost.glb: sheet + recessed lining; studio nodes excluded.');
