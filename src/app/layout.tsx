@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "vGPU Experiments",
+  title: "colton.boo",
   description: "Interactive WebGPU experiments powered by vGPU.",
 };
 
