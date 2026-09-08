@@ -134,9 +134,11 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
         spawned.splice(0,spawned.length,...active);
         for(const spawn of spawned) {
           const age=(now-spawn.started)/1000;
-          // Keep the launched ghost in front of the parent cloth at its birth point.
-          const offset:[number,number,number]=[spawn.x+Math.sin(age*5)*age*.12,spawn.y+age*1.45,.9];
-          spawn.meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset,spin:age*11,scale:.34,fade:Math.max(0,Math.min(1,(2.5-age)/.7))}));
+          const variation=((Math.sin(spawn.id*12.9898)*43758.5453)%1+1)%1;
+          const progress=Math.min(1,age/2.5), flight=progress*progress;
+          // Ease in, then accelerate away; each ghost gets its own arc and spin.
+          const offset:[number,number,number]=[spawn.x+(variation-.5)*1.1*flight+Math.sin(age*(4+variation*4))*.08*flight,spawn.y+(2.9+variation*1.1)*flight,.9];
+          spawn.meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset,spin:age*(8+variation*9),scale:.34,fade:Math.max(0,Math.min(1,(2.5-age)/.7))}));
         }
         frame.pass(scene,pass=>{meshes.forEach(m=>pass.draw(m));spawned.forEach(spawn=>spawn.meshes.forEach(m=>pass.draw(m)));});
         composite.set({scene:scene.color,aspect});frame.pass(screen,composite);
