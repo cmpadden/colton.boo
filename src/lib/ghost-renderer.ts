@@ -125,7 +125,7 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
         const time=reduced?0:(performance.now()-started)/1000;
         meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset:[0,0,0],spin:0,scale:1}));
         const now=performance.now();
-        orbit.spawns=orbit.spawns.filter(spawn=>now-spawn.started<2500);
+        orbit.spawns=(orbit.spawns??[]).filter(spawn=>now-spawn.started<2500);
         for(const spawn of orbit.spawns) if(!spawned.some(s=>s.id===spawn.id)) spawned.push({...spawn,meshes:makeMeshes()});
         const active=spawned.filter(spawn=>now-spawn.started<2500);
         spawned.splice(0,spawned.length,...active);

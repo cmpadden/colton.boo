@@ -22,7 +22,7 @@ export default function Home() {
       e.preventDefault();
       const rect=e.currentTarget.getBoundingClientRect(),aspect=rect.width/rect.height;
       const extent=2/(Math.min(aspect,1)*orbit.current.zoom);
-      orbit.current.spawns.push({id:performance.now(),x:((e.clientX-rect.left)/rect.width*2-1)*extent*aspect,y:(1-(e.clientY-rect.top)/rect.height*2)*extent,started:performance.now()});
+      (orbit.current.spawns??=[]).push({id:performance.now(),x:((e.clientX-rect.left)/rect.width*2-1)*extent*aspect,y:(1-(e.clientY-rect.top)/rect.height*2)*extent,started:performance.now()});
       return;
     }
     pointer.current={id:e.pointerId,x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);
