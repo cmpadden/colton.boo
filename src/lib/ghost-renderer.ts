@@ -1,6 +1,7 @@
 import { init, surface, target, geometry, draw, effect, frameLoop } from 'vgpu';
 
-export type Orbit = { yaw: number; pitch: number; zoom: number };
+export type Spawn = { id: number; x: number; y: number; started: number };
+export type Orbit = { yaw: number; pitch: number; zoom: number; spawns: Spawn[] }; 
 type Accessor = { bufferView: number; byteOffset?: number; componentType: number; count: number; type: string };
 type Glb = {
   accessors: Accessor[];
@@ -46,18 +47,21 @@ function readGhost(bytes: ArrayBuffer) {
 }
 
 const meshShader = `
-struct Params { yaw:f32, pitch:f32, zoom:f32, aspect:f32, time:f32, color:vec3f }
+struct Params { yaw:f32, pitch:f32, zoom:f32, aspect:f32, time:f32, offset:vec3f, spin:f32, scale:f32, color:vec3f }
 @group(0) @binding(0) var<uniform> u:Params;
 struct Out { @builtin(position) clip:vec4f, @location(0) world:vec3f, @location(1) normal:vec3f }
 fn rotate(p:vec3f)->vec3f {
   let q=vec3f(cos(u.yaw)*p.x+sin(u.yaw)*p.z,p.y,-sin(u.yaw)*p.x+cos(u.yaw)*p.z);
   return vec3f(q.x,cos(u.pitch)*q.y-sin(u.pitch)*q.z,sin(u.pitch)*q.y+cos(u.pitch)*q.z);
 }
+fn spin(p:vec3f)->vec3f {
+  return vec3f(cos(u.spin)*p.x+sin(u.spin)*p.z,p.y,-sin(u.spin)*p.x+cos(u.spin)*p.z);
+}
 @vertex fn vs(@location(0) position:vec3f,@location(1) normal:vec3f)->Out {
-  var o:Out; let p=rotate(position)+vec3f(0,sin(u.time*.8)*.035,0);
+  var o:Out; let p=rotate(spin(position)*u.scale)+u.offset+vec3f(0,sin(u.time*.8)*.035,0);
   let extent=2.0/(min(u.aspect,1.0)*u.zoom);
   o.clip=vec4f(p.x/(extent*u.aspect),p.y/extent,(5.0-p.z)/10.0,1);
-  o.world=p; o.normal=rotate(normal); return o;
+  o.world=p; o.normal=rotate(spin(normal)); return o;
 }
 @fragment fn fs(v:Out,@builtin(front_facing) front:bool)->@location(0) vec4f {
   if(u.color.x<.01){
@@ -105,7 +109,11 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
     const scene=target(gpu,{size:[1,1],depth:true,msaa:4,format:'rgba8unorm',clearColor:[0,0,0,0]});
     const meshes=[...parts].sort((a,b)=>Number(a.eye)-Number(b.eye)).map(p=>draw(gpu,{shader:meshShader,depth:p.eye?false:undefined,geometry:geometry(gpu,{
       buffers:[{attributes:{position:'float32x3'},data:p.positions},{attributes:{normal:'float32x3'},data:p.normals}],indices:p.indices,
-    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,color:p.color}}}));
+    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,offset:[0,0,0],spin:0,scale:1,color:p.color}}}));
+    const makeMeshes=()=>[...parts].sort((a,b)=>Number(a.eye)-Number(b.eye)).map(p=>draw(gpu,{shader:meshShader,depth:p.eye?false:undefined,geometry:geometry(gpu,{
+      buffers:[{attributes:{position:'float32x3'},data:p.positions},{attributes:{normal:'float32x3'},data:p.normals}],indices:p.indices,
+    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,offset:[0,0,0],spin:0,scale:.34,color:p.color}}}));
+    const spawned: { id:number; started:number; x:number; y:number; meshes:ReturnType<typeof makeMeshes> }[]=[];
     const composite=effect(gpu,compositeShader);
     const started=performance.now();
     const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -114,8 +122,19 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
         const [w,h]=screen.size;
         if(scene.size[0]!==w||scene.size[1]!==h) scene.resize([w,h]);
         const aspect=w/h;
-        meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time:reduced?0:(performance.now()-started)/1000}));
-        frame.pass(scene,pass=>meshes.forEach(m=>pass.draw(m)));
+        const time=reduced?0:(performance.now()-started)/1000;
+        meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset:[0,0,0],spin:0,scale:1}));
+        const now=performance.now();
+        orbit.spawns=orbit.spawns.filter(spawn=>now-spawn.started<2500);
+        for(const spawn of orbit.spawns) if(!spawned.some(s=>s.id===spawn.id)) spawned.push({...spawn,meshes:makeMeshes()});
+        const active=spawned.filter(spawn=>now-spawn.started<2500);
+        spawned.splice(0,spawned.length,...active);
+        for(const spawn of spawned) {
+          const age=(now-spawn.started)/1000;
+          const offset:[number,number,number]=[spawn.x+Math.sin(age*5)*age*.12,spawn.y+age*1.45,0];
+          spawn.meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset,spin:age*11,scale:.34}));
+        }
+        frame.pass(scene,pass=>{meshes.forEach(m=>pass.draw(m));spawned.forEach(spawn=>spawn.meshes.forEach(m=>pass.draw(m)));});
         composite.set({scene:scene.color,aspect});frame.pass(screen,composite);
       } catch(e) { onError(e); throw e; }
     });
