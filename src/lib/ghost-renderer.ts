@@ -1,6 +1,6 @@
 import { init, surface, target, geometry, draw, effect, frameLoop } from 'vgpu';
 
-export type Orbit = { yaw: number; pitch: number };
+export type Orbit = { yaw: number; pitch: number; zoom: number };
 type Accessor = { bufferView: number; byteOffset?: number; componentType: number; count: number; type: string };
 type Glb = {
   accessors: Accessor[];
@@ -46,7 +46,7 @@ function readGhost(bytes: ArrayBuffer) {
 }
 
 const meshShader = `
-struct Params { yaw:f32, pitch:f32, aspect:f32, time:f32, color:vec3f }
+struct Params { yaw:f32, pitch:f32, zoom:f32, aspect:f32, time:f32, color:vec3f }
 @group(0) @binding(0) var<uniform> u:Params;
 struct Out { @builtin(position) clip:vec4f, @location(0) world:vec3f, @location(1) normal:vec3f }
 fn rotate(p:vec3f)->vec3f {
@@ -55,7 +55,7 @@ fn rotate(p:vec3f)->vec3f {
 }
 @vertex fn vs(@location(0) position:vec3f,@location(1) normal:vec3f)->Out {
   var o:Out; let p=rotate(position)+vec3f(0,sin(u.time*.8)*.035,0);
-  let extent=2.0/min(u.aspect,1.0);
+  let extent=2.0/(min(u.aspect,1.0)*u.zoom);
   o.clip=vec4f(p.x/(extent*u.aspect),p.y/extent,(5.0-p.z)/10.0,1);
   o.world=p; o.normal=rotate(normal); return o;
 }
@@ -105,7 +105,7 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
     const scene=target(gpu,{size:[1,1],depth:true,msaa:4,format:'rgba8unorm',clearColor:[0,0,0,0]});
     const meshes=[...parts].sort((a,b)=>Number(a.eye)-Number(b.eye)).map(p=>draw(gpu,{shader:meshShader,depth:p.eye?false:undefined,geometry:geometry(gpu,{
       buffers:[{attributes:{position:'float32x3'},data:p.positions},{attributes:{normal:'float32x3'},data:p.normals}],indices:p.indices,
-    }),set:{u:{yaw:0,pitch:0,aspect:1,time:0,color:p.color}}}));
+    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,color:p.color}}}));
     const composite=effect(gpu,compositeShader);
     const started=performance.now();
     const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -114,7 +114,7 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
         const [w,h]=screen.size;
         if(scene.size[0]!==w||scene.size[1]!==h) scene.resize([w,h]);
         const aspect=w/h;
-        meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,aspect,time:reduced?0:(performance.now()-started)/1000}));
+        meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time:reduced?0:(performance.now()-started)/1000}));
         frame.pass(scene,pass=>meshes.forEach(m=>pass.draw(m)));
         composite.set({scene:scene.color,aspect});frame.pass(screen,composite);
       } catch(e) { onError(e); throw e; }
