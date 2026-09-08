@@ -9,6 +9,8 @@ export default function Home() {
   const orbit=useRef({yaw:-0.28,pitch:-0.16,zoom:1,spawns:[] as Spawn[]});
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;moved:boolean}|null>(null);
   const lastTap=useRef<{time:number;x:number;y:number}|null>(null);
+  const touches=useRef(new Map<number,{x:number;y:number}>());
+  const pinch=useRef<{distance:number;zoom:number}|null>(null);
   const [status,setStatus]=useState('Summoning…');
   const [launchMode,setLaunchMode]=useState(false);
   useEffect(()=>{
@@ -29,12 +31,18 @@ export default function Home() {
     const extent=2/(Math.min(aspect,1)*orbit.current.zoom);
     (orbit.current.spawns??=[]).push({id:performance.now(),x:((e.clientX-rect.left)/rect.width*2-1)*extent*aspect,y:(1-(e.clientY-rect.top)/rect.height*2)*extent,started:performance.now()});
   }
+  function distance(){const [a,b]=[...touches.current.values()];return a&&b?Math.hypot(a.x-b.x,a.y-b.y):0;}
   function down(e:PointerEvent<HTMLCanvasElement>){
+    if(e.pointerType==='touch'){
+      touches.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(touches.current.size===2){pinch.current={distance:distance(),zoom:orbit.current.zoom};pointer.current=null;return;}
+    }
     if(pointer.current || e.button!==0)return;
     if(e.metaKey||e.ctrlKey){e.preventDefault();launch(e);return;}
     pointer.current={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};e.currentTarget.setPointerCapture(e.pointerId);
   }
   function up(e:PointerEvent<HTMLCanvasElement>){
+    if(e.pointerType==='touch'){touches.current.delete(e.pointerId);if(touches.current.size<2)pinch.current=null;}
     const p=pointer.current;if(!p||p.id!==e.pointerId)return;
     pointer.current=null;
     if(e.pointerType!=='touch'||p.moved)return;
@@ -43,6 +51,10 @@ export default function Home() {
     else lastTap.current={time,x:e.clientX,y:e.clientY};
   }
   function move(e:PointerEvent<HTMLCanvasElement>){
+    if(e.pointerType==='touch'){
+      touches.current.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(pinch.current&&pinch.current.distance>0&&touches.current.size>=2){orbit.current.zoom=Math.max(.325,Math.min(2.5,pinch.current.zoom*distance()/pinch.current.distance));return;}
+    }
     const p=pointer.current;if(!p||p.id!==e.pointerId)return;
     orbit.current.yaw+=(e.clientX-p.x)*.008;
     orbit.current.pitch=Math.max(-1.1,Math.min(1.1,orbit.current.pitch+(e.clientY-p.y)*.008));
@@ -53,7 +65,7 @@ export default function Home() {
   function zoom(delta:number){orbit.current.zoom=Math.max(.325,Math.min(2.5,orbit.current.zoom*Math.exp(-delta*.001)));}
   return <main className={styles.page}>
     <canvas className={launchMode?styles.launchMode:undefined} ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={up} onContextMenu={e=>e.preventDefault()}
-      onPointerCancel={()=>{pointer.current=null;}} onLostPointerCapture={()=>{pointer.current=null;}}
+      onPointerCancel={e=>{touches.current.delete(e.pointerId);if(pointer.current?.id===e.pointerId)pointer.current=null;if(touches.current.size<2)pinch.current=null;}} onLostPointerCapture={()=>{pointer.current=null;touches.current.clear();pinch.current=null;}}
       tabIndex={0} aria-label="Ghost. Command-click or double-tap to launch a tiny ghost; drag to rotate, scroll to zoom, or use the arrow keys."
       onWheel={e=>{e.preventDefault();zoom(e.deltaY);}}
       onKeyDown={e=>{if(e.key.startsWith('Arrow')){e.preventDefault();orbit.current.yaw+=e.key==='ArrowRight'?.1:e.key==='ArrowLeft'?-.1:0;orbit.current.pitch=Math.max(-1.1,Math.min(1.1,orbit.current.pitch+(e.key==='ArrowDown'?.1:e.key==='ArrowUp'?-.1:0)));}if(e.key==='Home')reset();}} />
