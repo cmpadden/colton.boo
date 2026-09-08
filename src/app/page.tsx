@@ -58,6 +58,6 @@ export default function Home() {
       onWheel={e=>{e.preventDefault();zoom(e.deltaY);}}
       onKeyDown={e=>{if(e.key.startsWith('Arrow')){e.preventDefault();orbit.current.yaw+=e.key==='ArrowRight'?.1:e.key==='ArrowLeft'?-.1:0;orbit.current.pitch=Math.max(-1.1,Math.min(1.1,orbit.current.pitch+(e.key==='ArrowDown'?.1:e.key==='ArrowUp'?-.1:0)));}if(e.key==='Home')reset();}} />
     {status&&<p className={styles.status} role="status">{status}</p>}
-    <footer className={styles.controls}><span>⌘-click or double-tap to spawn a ghost · Drag to turn · Scroll to zoom</span><button onClick={reset}>Reset view</button></footer>
+    <footer className={styles.controls}><span>⌘-click or double-tap · Drag to turn · Scroll to zoom</span><button onClick={reset}>Reset view</button></footer>
   </main>;
 }
