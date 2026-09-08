@@ -23,15 +23,16 @@ export default function Home() {
     addEventListener('keydown',update);addEventListener('keyup',update);addEventListener('blur',clear);
     return ()=>{removeEventListener('keydown',update);removeEventListener('keyup',update);removeEventListener('blur',clear);};
   },[]);
+  function launch(e:PointerEvent<HTMLCanvasElement>){
+    const rect=e.currentTarget.getBoundingClientRect(),aspect=rect.width/rect.height;
+    const extent=2/(Math.min(aspect,1)*orbit.current.zoom);
+    (orbit.current.spawns??=[]).push({id:performance.now(),x:((e.clientX-rect.left)/rect.width*2-1)*extent*aspect,y:(1-(e.clientY-rect.top)/rect.height*2)*extent,started:performance.now()});
+  }
   function down(e:PointerEvent<HTMLCanvasElement>){
+    // A second finger is the touch equivalent of a modifier-click.
+    if(e.pointerType==='touch'&&pointer.current){launch(e);pointer.current=null;return;}
     if(pointer.current || e.button!==0)return;
-    if(e.metaKey||e.ctrlKey){
-      e.preventDefault();
-      const rect=e.currentTarget.getBoundingClientRect(),aspect=rect.width/rect.height;
-      const extent=2/(Math.min(aspect,1)*orbit.current.zoom);
-      (orbit.current.spawns??=[]).push({id:performance.now(),x:((e.clientX-rect.left)/rect.width*2-1)*extent*aspect,y:(1-(e.clientY-rect.top)/rect.height*2)*extent,started:performance.now()});
-      return;
-    }
+    if(e.metaKey||e.ctrlKey){e.preventDefault();launch(e);return;}
     pointer.current={id:e.pointerId,x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);
   }
   function move(e:PointerEvent<HTMLCanvasElement>){
@@ -45,10 +46,10 @@ export default function Home() {
   return <main className={styles.page}>
     <canvas className={launchMode?styles.launchMode:undefined} ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={()=>{pointer.current=null;}} onContextMenu={e=>e.preventDefault()}
       onPointerCancel={()=>{pointer.current=null;}} onLostPointerCapture={()=>{pointer.current=null;}}
-      tabIndex={0} aria-label="Ghost. Command-click to launch a tiny ghost; drag to rotate, scroll to zoom, or use the arrow keys."
+      tabIndex={0} aria-label="Ghost. Command-click or tap with two fingers to launch a tiny ghost; drag to rotate, scroll to zoom, or use the arrow keys."
       onWheel={e=>{e.preventDefault();zoom(e.deltaY);}}
       onKeyDown={e=>{if(e.key.startsWith('Arrow')){e.preventDefault();orbit.current.yaw+=e.key==='ArrowRight'?.1:e.key==='ArrowLeft'?-.1:0;orbit.current.pitch=Math.max(-1.1,Math.min(1.1,orbit.current.pitch+(e.key==='ArrowDown'?.1:e.key==='ArrowUp'?-.1:0)));}if(e.key==='Home')reset();}} />
     {status&&<p className={styles.status} role="status">{status}</p>}
-    <footer className={styles.controls}><span>⌘-click to spawn a ghost · Drag to turn · Scroll to zoom</span><button onClick={reset}>Reset view</button></footer>
+    <footer className={styles.controls}><span>⌘-click or two-finger tap to spawn a ghost · Drag to turn · Scroll to zoom</span><button onClick={reset}>Reset view</button></footer>
   </main>;
 }
