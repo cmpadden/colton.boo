@@ -19,6 +19,7 @@ export default function Home() {
   function down(e:PointerEvent<HTMLCanvasElement>){
     if(pointer.current || e.button!==0)return;
     if(e.metaKey||e.ctrlKey){
+      e.preventDefault();
       const rect=e.currentTarget.getBoundingClientRect(),aspect=rect.width/rect.height;
       const extent=2/(Math.min(aspect,1)*orbit.current.zoom);
       orbit.current.spawns.push({id:performance.now(),x:((e.clientX-rect.left)/rect.width*2-1)*extent*aspect,y:(1-(e.clientY-rect.top)/rect.height*2)*extent,started:performance.now()});
@@ -35,7 +36,7 @@ export default function Home() {
   function reset(){orbit.current.yaw=-0.28;orbit.current.pitch=-0.16;orbit.current.zoom=1;}
   function zoom(delta:number){orbit.current.zoom=Math.max(.325,Math.min(2.5,orbit.current.zoom*Math.exp(-delta*.001)));}
   return <main className={styles.page}>
-    <canvas ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={()=>{pointer.current=null;}}
+    <canvas ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={()=>{pointer.current=null;}} onContextMenu={e=>e.preventDefault()}
       onPointerCancel={()=>{pointer.current=null;}} onLostPointerCapture={()=>{pointer.current=null;}}
       tabIndex={0} aria-label="Ghost. Command or Control-click to launch a tiny ghost; drag to rotate, scroll to zoom, or use the arrow keys."
       onWheel={e=>{e.preventDefault();zoom(e.deltaY);}}
