@@ -6,7 +6,7 @@ import styles from './page.module.css';
 
 export default function Home() {
   const canvas=useRef<HTMLCanvasElement>(null);
-  const orbit=useRef({yaw:-0.28,pitch:-0.16,zoom:1.25});
+  const orbit=useRef({yaw:-0.28,pitch:-0.16,zoom:1.1});
   const pointer=useRef<{id:number;x:number;y:number}|null>(null);
   const [status,setStatus]=useState('Summoning…');
   useEffect(()=>{
@@ -26,7 +26,7 @@ export default function Home() {
     orbit.current.pitch=Math.max(-1.1,Math.min(1.1,orbit.current.pitch+(e.clientY-p.y)*.008));
     p.x=e.clientX;p.y=e.clientY;
   }
-  function reset(){orbit.current.yaw=-0.28;orbit.current.pitch=-0.16;orbit.current.zoom=1.25;}
+  function reset(){orbit.current.yaw=-0.28;orbit.current.pitch=-0.16;orbit.current.zoom=1.1;}
   function zoom(delta:number){orbit.current.zoom=Math.max(.325,Math.min(2.5,orbit.current.zoom*Math.exp(-delta*.001)));}
   return <main className={styles.page}>
     <canvas ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={()=>{pointer.current=null;}}
