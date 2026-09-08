@@ -9,12 +9,19 @@ export default function Home() {
   const orbit=useRef({yaw:-0.28,pitch:-0.16,zoom:1,spawns:[] as Spawn[]});
   const pointer=useRef<{id:number;x:number;y:number}|null>(null);
   const [status,setStatus]=useState('Summoning…');
+  const [launchMode,setLaunchMode]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();
     const fail=(e:unknown)=>{if(!controller.signal.aborted){console.error(e);setStatus('Unable to render. Please use a browser with WebGPU enabled.');}};
     void createGhostRenderer(canvas.current!,orbit.current,controller.signal,fail)
       .then(()=>{if(!controller.signal.aborted)setStatus('');}).catch(fail);
     return ()=>controller.abort();
+  },[]);
+  useEffect(()=>{
+    const update=(e:KeyboardEvent)=>setLaunchMode(e.metaKey||e.ctrlKey);
+    const clear=()=>setLaunchMode(false);
+    addEventListener('keydown',update);addEventListener('keyup',update);addEventListener('blur',clear);
+    return ()=>{removeEventListener('keydown',update);removeEventListener('keyup',update);removeEventListener('blur',clear);};
   },[]);
   function down(e:PointerEvent<HTMLCanvasElement>){
     if(pointer.current || e.button!==0)return;
@@ -36,12 +43,12 @@ export default function Home() {
   function reset(){orbit.current.yaw=-0.28;orbit.current.pitch=-0.16;orbit.current.zoom=1;}
   function zoom(delta:number){orbit.current.zoom=Math.max(.325,Math.min(2.5,orbit.current.zoom*Math.exp(-delta*.001)));}
   return <main className={styles.page}>
-    <canvas ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={()=>{pointer.current=null;}} onContextMenu={e=>e.preventDefault()}
+    <canvas className={launchMode?styles.launchMode:undefined} ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={()=>{pointer.current=null;}} onContextMenu={e=>e.preventDefault()}
       onPointerCancel={()=>{pointer.current=null;}} onLostPointerCapture={()=>{pointer.current=null;}}
-      tabIndex={0} aria-label="Ghost. Command or Control-click to launch a tiny ghost; drag to rotate, scroll to zoom, or use the arrow keys."
+      tabIndex={0} aria-label="Ghost. Command-click to launch a tiny ghost; drag to rotate, scroll to zoom, or use the arrow keys."
       onWheel={e=>{e.preventDefault();zoom(e.deltaY);}}
       onKeyDown={e=>{if(e.key.startsWith('Arrow')){e.preventDefault();orbit.current.yaw+=e.key==='ArrowRight'?.1:e.key==='ArrowLeft'?-.1:0;orbit.current.pitch=Math.max(-1.1,Math.min(1.1,orbit.current.pitch+(e.key==='ArrowDown'?.1:e.key==='ArrowUp'?-.1:0)));}if(e.key==='Home')reset();}} />
     {status&&<p className={styles.status} role="status">{status}</p>}
-    <footer className={styles.controls}><span>⌘/Ctrl-click to launch a ghost · Drag to turn · Scroll to zoom</span><button onClick={reset}>Reset view</button></footer>
+    <footer className={styles.controls}><span>⌘-click to spawn a ghost · Drag to turn · Scroll to zoom</span><button onClick={reset}>Reset view</button></footer>
   </main>;
 }
