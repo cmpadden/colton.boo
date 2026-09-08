@@ -6,7 +6,7 @@ import styles from './page.module.css';
 
 export default function Home() {
   const canvas=useRef<HTMLCanvasElement>(null);
-  const orbit=useRef({yaw:-0.28,pitch:-0.16,zoom:1,spawns:[] as Spawn[]});
+  const orbit=useRef({yaw:-0.4,pitch:0.25,zoom:1,spawns:[] as Spawn[]});
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;moved:boolean}|null>(null);
   const lastTap=useRef<{time:number;x:number;y:number}|null>(null);
   const touches=useRef(new Map<number,{x:number;y:number}>());
@@ -61,7 +61,7 @@ export default function Home() {
     if(Math.hypot(e.clientX-p.startX,e.clientY-p.startY)>8)p.moved=true;
     p.x=e.clientX;p.y=e.clientY;
   }
-  function reset(){orbit.current.yaw=-0.28;orbit.current.pitch=-0.16;orbit.current.zoom=1;}
+  function reset(){orbit.current.yaw=-0.4;orbit.current.pitch=0.25;orbit.current.zoom=1;}
   function zoom(delta:number){orbit.current.zoom=Math.max(.325,Math.min(2.5,orbit.current.zoom*Math.exp(-delta*.001)));}
   return <main className={styles.page}>
     <canvas className={launchMode?styles.launchMode:undefined} ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={up} onContextMenu={e=>e.preventDefault()}

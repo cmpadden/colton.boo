@@ -86,14 +86,53 @@ fn noise(p:vec3f)->f32 { return fract(sin(dot(p,vec3f(12.9898,78.233,37.719)))*4
 
 const compositeShader=`
 @group(0) @binding(0) var scene:texture_2d<f32>;
-@group(0) @binding(1) var<uniform> aspect:f32;
+struct SmokeParams { aspect:f32, time:f32, sourceA:vec4f, sourceB:vec4f, sourceC:vec4f, sourceD:vec4f }
+@group(0) @binding(1) var<uniform> u:SmokeParams;
+fn hash(p:vec2f)->f32 { return fract(sin(dot(p,vec2f(127.1,311.7)))*43758.5453); }
+fn noise(p:vec2f)->f32 {
+  let i=floor(p); let f=fract(p); let s=f*f*(3.0-2.0*f);
+  return mix(mix(hash(i),hash(i+vec2f(1,0)),s.x),mix(hash(i+vec2f(0,1)),hash(i+vec2f(1,1)),s.x),s.y);
+}
+fn smoke(p:vec2f)->f32 {
+  var value=0.0; var scale=1.0; var weight=.5;
+  for(var i=0;i<4;i++){ value+=noise(p*scale)*weight; scale*=2.03; weight*=.5; }
+  return value;
+}
+fn plume(q:vec2f,source:vec4f)->f32 {
+  if(source.w<.01){return 0.0;}
+  let rise=source.y-q.y;
+  if(rise<0.0){return 0.0;}
+  // The column broadens and meanders as it rises, instead of forming a vortex.
+  let width=.055+rise*.19;
+  let drift=(noise(vec2f(rise*1.7-source.z*.35,source.x*5.0))-.5)*width*1.8;
+  let side=(q.x-source.x-drift)/width;
+  let envelope=exp(-side*side*1.7)*exp(-rise*.72);
+  let billows=smoke(vec2f((q.x-source.x-drift)*5.5+source.z*.12,rise*2.8-source.z*.28));
+  return envelope*smoothstep(.34,.73,billows)*source.w;
+}
+fn trail(q:vec2f,source:vec4f)->f32 {
+  // Sources stronger than one are launched ghosts; their acceleration leaves vapor behind.
+  if(source.w<=1.0){return 0.0;}
+  let lag=q.y-source.y;
+  if(lag<0.0){return 0.0;}
+  let length=.13+min(source.z,2.5)*.24;
+  let width=.045+lag*.12;
+  let drift=sin(lag*9.0-source.z*4.0)*width*.65;
+  let envelope=exp(-pow((q.x-source.x-drift)/width,2.0))*exp(-lag/length*1.8);
+  let billows=smoke(vec2f((q.x-source.x)*7.0,lag*5.0-source.z*.8));
+  return envelope*smoothstep(.28,.7,billows)*(source.w-1.0);
+}
 @fragment fn fs(@builtin(position) p:vec4f)->@location(0) vec4f {
   let size=vec2f(textureDimensions(scene)); let uv=p.xy/size;
-  let q=(uv-.5)*vec2f(aspect,1);
+  let q=(uv-.5)*vec2f(u.aspect,1);
   let halo=exp(-dot(q*vec2f(1.5,1.1),q*vec2f(1.5,1.1))*7.0);
   var bg=vec3f(.008,.009,.02)+vec3f(.045,.027,.085)*halo;
   let floor=exp(-pow(q.x*3.0,2.0)-pow((q.y-.31)*18.0,2.0));
   bg+=vec3f(.035,.018,.062)*floor;
+  let haze=smoothstep(.43,.72,smoke(vec2f(q.x*3.0,q.y*3.0-u.time*.12)))*exp(-abs(q.y)*.7);
+  let emitted=plume(q,u.sourceA)+plume(q,u.sourceB)+plume(q,u.sourceC)+plume(q,u.sourceD);
+  let vapor=trail(q,u.sourceA)+trail(q,u.sourceB)+trail(q,u.sourceC)+trail(q,u.sourceD);
+  bg+=vec3f(.04,.06,.16)*(haze*.18+emitted*1.25+vapor*1.5);
   let pixel=textureLoad(scene,vec2i(p.xy),0);
   return vec4f(mix(bg,pixel.rgb,pixel.a),1);
 }`;
@@ -132,6 +171,9 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
         for(const spawn of orbit.spawns) if(!spawned.some(s=>s.id===spawn.id)) spawned.push({...spawn,meshes:makeMeshes()});
         const active=spawned.filter(spawn=>now-spawn.started<2500);
         spawned.splice(0,spawned.length,...active);
+        const extent=2/(Math.min(aspect,1)*orbit.zoom);
+        // Each source is the lower edge of a ghost in composite-screen space.
+        const smokeSources: [number,number,number,number][]=[[0,1/(2*extent),time,1]];
         for(const spawn of spawned) {
           const age=(now-spawn.started)/1000;
           const variation=((Math.sin(spawn.id*12.9898)*43758.5453)%1+1)%1;
@@ -139,9 +181,10 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
           // Ease in, then accelerate away; each ghost gets its own arc and spin.
           const offset:[number,number,number]=[spawn.x+(variation-.5)*1.1*flight+Math.sin(age*(4+variation*4))*.08*flight,spawn.y+(2.9+variation*1.1)*flight,.9];
           spawn.meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset,spin:age*(8+variation*9),scale:.34,fade:Math.max(0,Math.min(1,(2.5-age)/.7))}));
+          if(smokeSources.length<4)smokeSources.push([offset[0]/(2*extent),-(offset[1]-.34)/(2*extent),age,2.4]);
         }
         frame.pass(scene,pass=>{meshes.forEach(m=>pass.draw(m));spawned.forEach(spawn=>spawn.meshes.forEach(m=>pass.draw(m)));});
-        composite.set({scene:scene.color,aspect});frame.pass(screen,composite);
+        composite.set({scene:scene.color,aspect,time,sourceA:smokeSources[0]??[0,0,0,0],sourceB:smokeSources[1]??[0,0,0,0],sourceC:smokeSources[2]??[0,0,0,0],sourceD:smokeSources[3]??[0,0,0,0]});frame.pass(screen,composite);
       } catch(e) { onError(e); throw e; }
     });
   } catch(e) {gpu.dispose();throw e;}
