@@ -47,7 +47,7 @@ function readGhost(bytes: ArrayBuffer) {
 }
 
 const meshShader = `
-struct Params { yaw:f32, pitch:f32, zoom:f32, aspect:f32, time:f32, offset:vec3f, spin:f32, scale:f32, color:vec3f }
+struct Params { yaw:f32, pitch:f32, zoom:f32, aspect:f32, time:f32, offset:vec3f, spin:f32, scale:f32, fade:f32, color:vec3f }
 @group(0) @binding(0) var<uniform> u:Params;
 struct Out { @builtin(position) clip:vec4f, @location(0) world:vec3f, @location(1) normal:vec3f }
 fn rotate(p:vec3f)->vec3f {
@@ -63,7 +63,10 @@ fn spin(p:vec3f)->vec3f {
   o.clip=vec4f(p.x/(extent*u.aspect),p.y/extent,(5.0-p.z)/10.0,1);
   o.world=p; o.normal=rotate(spin(normal)); return o;
 }
+fn noise(p:vec3f)->f32 { return fract(sin(dot(p,vec3f(12.9898,78.233,37.719)))*43758.5453); }
 @fragment fn fs(v:Out,@builtin(front_facing) front:bool)->@location(0) vec4f {
+  // Dithered discard makes departing ghosts dissolve instead of popping out.
+  if(u.fade<noise(floor(v.world*36.0))) { discard; }
   if(u.color.x<.01){
     let pulse=.38+.10*sin(u.time*1.7)+.035*sin(u.time*4.3);
     let glow=vec3f(.16,.002,.004)*pulse+vec3f(.055,.001,.002)*pulse;
@@ -109,10 +112,10 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
     const scene=target(gpu,{size:[1,1],depth:true,msaa:4,format:'rgba8unorm',clearColor:[0,0,0,0]});
     const meshes=[...parts].sort((a,b)=>Number(a.eye)-Number(b.eye)).map(p=>draw(gpu,{shader:meshShader,depth:p.eye?false:undefined,geometry:geometry(gpu,{
       buffers:[{attributes:{position:'float32x3'},data:p.positions},{attributes:{normal:'float32x3'},data:p.normals}],indices:p.indices,
-    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,offset:[0,0,0],spin:0,scale:1,color:p.color}}}));
+    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,offset:[0,0,0],spin:0,scale:1,fade:1,color:p.color}}}));
     const makeMeshes=()=>[...parts].sort((a,b)=>Number(a.eye)-Number(b.eye)).map(p=>draw(gpu,{shader:meshShader,depth:p.eye?false:undefined,geometry:geometry(gpu,{
       buffers:[{attributes:{position:'float32x3'},data:p.positions},{attributes:{normal:'float32x3'},data:p.normals}],indices:p.indices,
-    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,offset:[0,0,0],spin:0,scale:.34,color:p.color}}}));
+    }),set:{u:{yaw:0,pitch:0,zoom:1,aspect:1,time:0,offset:[0,0,0],spin:0,scale:.34,fade:1,color:p.color}}}));
     const spawned: { id:number; started:number; x:number; y:number; meshes:ReturnType<typeof makeMeshes> }[]=[];
     const composite=effect(gpu,compositeShader);
     const started=performance.now();
@@ -123,7 +126,7 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
         if(scene.size[0]!==w||scene.size[1]!==h) scene.resize([w,h]);
         const aspect=w/h;
         const time=reduced?0:(performance.now()-started)/1000;
-        meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset:[0,0,0],spin:0,scale:1}));
+        meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset:[0,0,0],spin:0,scale:1,fade:1}));
         const now=performance.now();
         orbit.spawns=(orbit.spawns??[]).filter(spawn=>now-spawn.started<2500);
         for(const spawn of orbit.spawns) if(!spawned.some(s=>s.id===spawn.id)) spawned.push({...spawn,meshes:makeMeshes()});
@@ -133,7 +136,7 @@ export async function createGhostRenderer(canvas:HTMLCanvasElement, orbit:Orbit,
           const age=(now-spawn.started)/1000;
           // Keep the launched ghost in front of the parent cloth at its birth point.
           const offset:[number,number,number]=[spawn.x+Math.sin(age*5)*age*.12,spawn.y+age*1.45,.9];
-          spawn.meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset,spin:age*11,scale:.34}));
+          spawn.meshes.forEach(m=>m.set({yaw:orbit.yaw,pitch:orbit.pitch,zoom:orbit.zoom,aspect,time,offset,spin:age*11,scale:.34,fade:Math.max(0,Math.min(1,(2.5-age)/.7))}));
         }
         frame.pass(scene,pass=>{meshes.forEach(m=>pass.draw(m));spawned.forEach(spawn=>spawn.meshes.forEach(m=>pass.draw(m)));});
         composite.set({scene:scene.color,aspect});frame.pass(screen,composite);
